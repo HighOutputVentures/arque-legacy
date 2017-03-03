@@ -7,7 +7,7 @@ import Arque from 'arque';
 
 const arque = new Arque();
 
-arque.worker('echo', async message => {
+arque.createWorker('echo', async message => {
   return message;
 });
 ```
@@ -20,7 +20,7 @@ import assert from 'assert';
 const arque = new Arque();
 
 arque
-  .job('echo')
+  .createJob('echo')
   .exec('Hello World!')
   .then(message => {
     assert.equal(message, 'Hello World!');
