@@ -4,7 +4,7 @@
   "description": "RabbitMQ based microservice framework.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "ava"
   },
   "keywords": [
     "queue",
@@ -15,12 +15,35 @@
   "author": "Roger Madjos",
   "license": "ISC",
   "dependencies": {
-    "amqplib": "^0.5.1"
+    "amqplib": "^0.5.1",
+    "source-map-support": "^0.4.11",
+    "uuid": "^3.0.1"
   },
   "devDependencies": {
+    "ava": "^0.18.2",
+    "babel-cli": "^6.23.0",
+    "babel-plugin-transform-async-to-generator": "^6.22.0",
+    "babel-plugin-transform-es2015-modules-commonjs": "^6.23.0",
+    "babel-register": "^6.23.0",
     "eslint": "^3.16.1",
     "eslint-config-standard": "^7.0.0",
     "eslint-plugin-promise": "^3.5.0",
     "eslint-plugin-standard": "^2.1.1"
+  },
+  "ava": {
+    "files": [
+      "test/*.js",
+      "!test/helpers.js"
+    ],
+    "timeout": "30s",
+    "concurrency": 5,
+    "failFast": true,
+    "powerAssert": false,
+    "require": [
+      "source-map-support/register",
+      "babel-register"
+    ],
+    "babel": "inherit",
+    "verbose": true
   }
 }

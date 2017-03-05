@@ -20,12 +20,13 @@ import assert from 'assert';
 const arque = new Arque();
 
 arque
-  .createJob('echo')
+  .createClient('echo')
   .exec('Hello World!')
   .then(message => {
     assert.equal(message, 'Hello World!');
   });
 ```
+
 ### Options
 #### `Arque`
 * `url` - RabbitMQ URL
@@ -33,7 +34,7 @@ arque
 #### `Worker`
 * `job` - Job that is worked on by the worker
 * `concurrency` - Maimum number of jobs that can be executed by the worker
-#### `Job`
+#### `Client`
 * `name` - Job name
 * `return` - Flag to indicate wether to expect a return value
 * `timeout`

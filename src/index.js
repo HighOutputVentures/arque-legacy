@@ -1,6 +1,8 @@
 import amqp from 'amqplib';
-import assert from 'assert';
 import Worker from './worker';
+import Client from './client';
+
+const MAX_CONNECTION_LISTENERS = 1000;
 
 export default class Arque {
   constructor () {
@@ -18,43 +20,44 @@ export default class Arque {
   }
 
   async assertConnection () {
-    if (this._assertConnection) {
-      return await this._assertConnection;
-    }
-
-    this._assertConnection = amqp
-      .connect(this._url)
-      .then(connection => {
-        connection.on('error', err => {
-          console.error(err);
-          delete this._assertConnection;
-          this.initAllWorkers();
+    if (!this._assertConnection) {
+      this._assertConnection = amqp
+        .connect(this._url)
+        .then(connection => {
+          connection._maxListeners = MAX_CONNECTION_LISTENERS;
+          connection.on('error', () => {
+            delete this._assertConnection;
+            this.startAllWorkers();
+          });
+          return connection;
         });
-
-        return connection;
-      });
+    }
+    return await this._assertConnection;
   }
 
-  async initAllWorkers () {
+  async startAllWorkers () {
     let connection = await this.assertConnection();
-    await Promise.all(this._workers.map(worker => worker.init(connection)));
+    await Promise.all(this._workers.map(worker => worker.start(connection)));
   }
 
   async createWorker (options, handler) {
-    let job;
-    if (typeof options === 'string') {
-      job = options;
-    } else {
-      job = options.job;
-    }
-    assert(job, 'Job name not specified');
-
     let worker = new Worker(options, handler);
-
     let connection = await this.assertConnection();
-    await worker.init(connection);
+    await worker.start(connection);
     this._workers.push(worker);
 
     return worker;
+  }
+
+  async createClient (options, handler) {
+    let connection = await this.assertConnection();
+    let client = (function () {
+      const client = new Client(options);
+      client.setConnection(connection);
+      return async function () {
+        return await client.exec.apply(client, arguments);
+      };
+    })();
+    return client;
   }
 }

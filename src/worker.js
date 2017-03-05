@@ -23,7 +23,7 @@ export default class Worker {
     return (this._prefix || '') + this._job;
   }
 
-  async init (connection) {
+  async start (connection) {
     let channel = await connection.createChannel();
 
     await channel.assertQueue(this.queue, {
@@ -33,8 +33,22 @@ export default class Worker {
     channel.prefetch(this._concurrency);
     await channel.consume(this.queue, async message => {
       await channel.ack(message);
-      let payload = JSON.parse(message.content);
-      console.log(payload);
+      const payload = JSON.parse(message.content);
+      let result;
+      try {
+        result = {
+          result: await this._handler.apply(this._handler, payload.arguments)
+        };
+      } catch (err) {
+        result = {
+          error: err.message
+        };
+      }
+
+      channel.sendToQueue(
+        message.properties.replyTo,
+        new Buffer(JSON.stringify(result)),
+        {correlationId: message.properties.correlationId});
     });
   }
 }
