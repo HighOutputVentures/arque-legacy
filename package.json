@@ -47,5 +47,8 @@
     ],
     "babel": "inherit",
     "verbose": true
+  },
+  "engines": {
+    "node": ">= 6.10.0"
   }
 }
