@@ -32,8 +32,8 @@ arque
 * `url` - RabbitMQ URL
 * `prefix` - Queue name prefix
 #### `Worker`
-* `job` - Job that is worked on by the worker
-* `concurrency` - Maimum number of jobs that can be executed by the worker
+* `job` - Job name
+* `concurrency` - Maximum number of jobs that can be executed concurrently
 #### `Client`
 * `name` - Job name
 * `return` - Flag to indicate wether to expect a return value
