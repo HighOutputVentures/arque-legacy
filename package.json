@@ -2,9 +2,12 @@
   "name": "arque",
   "version": "0.1.0",
   "description": "RabbitMQ based microservice framework.",
-  "main": "index.js",
+  "main": "build/index.js",
   "scripts": {
-    "test": "ava"
+    "test": "ava",
+    "clean": "rm -rf build",
+    "build": "npm run clean && babel src --out-dir build",
+    "prepublish": "npm run build"
   },
   "keywords": [
     "queue",
