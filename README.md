@@ -27,14 +27,17 @@ arque
   });
 ```
 
-### Options
-#### `Arque`
+## Options
+
+### `Arque`
 * `url` - RabbitMQ URL
 * `prefix` - Queue name prefix
-#### `Worker`
+
+### `Worker`
 * `job` - Job name
 * `concurrency` - Maximum number of jobs that can be executed concurrently
-#### `Client`
+
+### `Client`
 * `name` - Job name
 * `return` - Flag to indicate wether to expect a return value
 * `timeout`
