@@ -1,6 +1,6 @@
 {
   "name": "arque",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "RabbitMQ based microservice framework.",
   "main": "build/index.js",
   "scripts": {
