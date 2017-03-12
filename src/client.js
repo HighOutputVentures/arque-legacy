@@ -55,6 +55,7 @@ export default class Client {
             callback(payload);
           }
         });
+        this._channel = channel;
         return channel;
       };
       this._assertChannel = assertChannel();
@@ -72,14 +73,7 @@ export default class Client {
       arguments: [].slice.call(arguments)
     };
 
-    const channel = await this.assertChannel();
-    await channel.sendToQueue(
-      this.queue,
-      new Buffer(JSON.stringify(payload)),
-      {correlationId, replyTo: this.callbackQueue}
-    );
-
-    return await new Promise((resolve, reject) => {
+    const promise = new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.deleteCallback(correlationId);
         const error = new Error('Job timeout.');
@@ -105,6 +99,15 @@ export default class Client {
         this.deleteCallback(correlationId);
       });
     });
+
+    const channel = await this.assertChannel();
+    await channel.sendToQueue(
+      this.queue,
+      new Buffer(JSON.stringify(payload)),
+      {correlationId, replyTo: this.callbackQueue}
+    );
+
+    return await promise;
   }
 
   deleteCallback (correlationId) {
@@ -115,11 +118,14 @@ export default class Client {
   }
 
   async close () {
-    await new Promise(resolve => {
-      this._closeCallback = resolve;
-    });
+    if (this._callbacks.size > 0) {
+      await new Promise(resolve => {
+        this._closeCallback = resolve;
+      });
+    }
 
-    const channel = await this.assertChannel();
-    await channel.close();
+    if (this._channel) {
+      await this._channel.close();
+    }
   }
 }

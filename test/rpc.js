@@ -8,7 +8,7 @@ import {delay} from './helpers';
 const arque = new Arque();
 
 test('Should execute job and return result.', async t => {
-  const DELAY = 200;
+  const DELAY = 250;
   const JOB_NAME = 'echo' + randString(8);
   const MESSAGE = 'Hello World!';
   await arque.createWorker(JOB_NAME, async message => {
@@ -21,7 +21,7 @@ test('Should execute job and return result.', async t => {
 });
 
 test('Should execute jobs sequentially', async t => {
-  const DELAY = 200;
+  const DELAY = 250;
   const JOB_NAME = 'echo' + randString(8);
   await arque.createWorker(JOB_NAME, async message => {
     await delay(DELAY);
@@ -33,14 +33,14 @@ test('Should execute jobs sequentially', async t => {
     return await echo({index});
   }));
   t.truthy(Date.now() - timestamp >= DELAY * 3);
-  t.truthy(Date.now() - timestamp < DELAY * 4);
+  t.truthy(Date.now() - timestamp < (DELAY * 3) + 250);
   t.deepEqual(result, _.times(3, index => {
     return {index};
   }));
 });
 
 test('Should execute jobs in parallel', async t => {
-  const DELAY = 200;
+  const DELAY = 250;
   const JOB_NAME = 'echo' + randString(8);
   await arque.createWorker({
     job: JOB_NAME,
@@ -55,14 +55,14 @@ test('Should execute jobs in parallel', async t => {
     return await echo({index});
   }));
   t.truthy(Date.now() - timestamp >= DELAY);
-  t.truthy(Date.now() - timestamp < DELAY * 2);
+  t.truthy(Date.now() - timestamp < DELAY + 250);
   t.deepEqual(result, _.times(10, index => {
     return {index};
   }));
 });
 
 test('Should distribute jobs to multiple workers', async t => {
-  const DELAY = 200;
+  const DELAY = 250;
   const JOB_NAME = 'echo' + randString(8);
   const counts = [];
   await Promise.all(_.times(5, async index => {
@@ -81,15 +81,21 @@ test('Should distribute jobs to multiple workers', async t => {
     return await echo({index});
   }));
   t.truthy(Date.now() - timestamp >= DELAY);
-  t.truthy(Date.now() - timestamp < DELAY * 2);
+  t.truthy(Date.now() - timestamp < DELAY + 250);
   t.deepEqual(result, _.times(20, index => {
     return {index};
   }));
   t.deepEqual(counts, [4, 4, 4, 4, 4]);
 });
 
+test('Should close client', async t => {
+  const JOB_NAME = 'echo' + randString(8);
+  const echo = await arque.createClient(JOB_NAME);
+  await echo.close();
+});
+
 test('Should close client gracefully.', async t => {
-  const DELAY = 200;
+  const DELAY = 250;
   const JOB_NAME = 'echo' + randString(8);
   await arque.createWorker({
     concurrency: 5,
@@ -105,14 +111,14 @@ test('Should close client gracefully.', async t => {
   const timestamp = Date.now();
   await echo.close();
   t.truthy(Date.now() - timestamp >= DELAY);
-  t.truthy(Date.now() - timestamp < DELAY * 2);
+  t.truthy(Date.now() - timestamp < DELAY + 250);
   t.deepEqual(await promise, _.times(5, index => {
     return {index};
   }));
 });
 
 test('Should close worker gracefully.', async t => {
-  const DELAY = 200;
+  const DELAY = 250;
   const JOB_NAME = 'echo' + randString(8);
   let count = 0;
   let receiveCallback;
@@ -138,7 +144,7 @@ test('Should close worker gracefully.', async t => {
   const timestamp = Date.now();
   await worker.close();
   t.truthy(Date.now() - timestamp >= DELAY);
-  t.truthy(Date.now() - timestamp < DELAY * 2);
+  t.truthy(Date.now() - timestamp < DELAY + 250);
   t.deepEqual(await promise, _.times(5, index => {
     return {index};
   }));
