@@ -26,13 +26,13 @@ class Worker {
 
   start(connection) {var _this = this;return _asyncToGenerator(function* () {
       let channel = yield connection.createChannel();
-
+      _this._channel = channel;
       yield channel.assertQueue(_this.queue, {
         durable: true });
 
 
       channel.prefetch(_this._concurrency);
-      _this._channel = channel;
+
       const { consumerTag } = yield channel.consume(_this.queue, (() => {var _ref = _asyncToGenerator(function* (message) {
           const correlationId = message.properties.correlationId;
           const payload = JSON.parse(message.content);
@@ -71,9 +71,11 @@ class Worker {
         const channel = _this2._channel;
         yield channel.cancel(_this2._consumerTag);
 
-        yield new Promise(function (resolve) {
-          _this2._closeCallback = resolve;
-        });
+        if (_this2._jobs.size > 0) {
+          yield new Promise(function (resolve) {
+            _this2._closeCallback = resolve;
+          });
+        }
 
         yield channel.close();
       }})();

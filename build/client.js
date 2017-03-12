@@ -55,6 +55,7 @@ class Client {
                   callback(payload);
                 }
               });return function (_x) {return _ref2.apply(this, arguments);};})());
+            _this._channel = channel;
             return channel;
           });return function assertChannel() {return _ref.apply(this, arguments);};})();
         _this._assertChannel = assertChannel();
@@ -72,14 +73,7 @@ class Client {
         arguments: [].slice.call(_arguments) };
 
 
-      const channel = yield _this2.assertChannel();
-      yield channel.sendToQueue(
-      _this2.queue,
-      new Buffer(JSON.stringify(payload)),
-      { correlationId, replyTo: _this2.callbackQueue });
-
-
-      return yield new Promise(function (resolve, reject) {
+      const promise = new Promise(function (resolve, reject) {
         const timeout = setTimeout(function () {
           _this2.deleteCallback(correlationId);
           const error = new Error('Job timeout.');
@@ -104,7 +98,16 @@ class Client {
           }
           _this2.deleteCallback(correlationId);
         });
-      });})();
+      });
+
+      const channel = yield _this2.assertChannel();
+      yield channel.sendToQueue(
+      _this2.queue,
+      new Buffer(JSON.stringify(payload)),
+      { correlationId, replyTo: _this2.callbackQueue });
+
+
+      return yield promise;})();
   }
 
   deleteCallback(correlationId) {
@@ -115,10 +118,13 @@ class Client {
   }
 
   close() {var _this3 = this;return _asyncToGenerator(function* () {
-      yield new Promise(function (resolve) {
-        _this3._closeCallback = resolve;
-      });
+      if (_this3._callbacks.size > 0) {
+        yield new Promise(function (resolve) {
+          _this3._closeCallback = resolve;
+        });
+      }
 
-      const channel = yield _this3.assertChannel();
-      yield channel.close();})();
+      if (_this3._channel) {
+        yield _this3._channel.close();
+      }})();
   }}exports.default = Client;
