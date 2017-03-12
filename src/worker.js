@@ -26,13 +26,13 @@ export default class Worker {
 
   async start (connection) {
     let channel = await connection.createChannel();
-
+    this._channel = channel;
     await channel.assertQueue(this.queue, {
       durable: true
     });
 
     channel.prefetch(this._concurrency);
-    this._channel = channel;
+
     const {consumerTag} = await channel.consume(this.queue, async message => {
       const correlationId = message.properties.correlationId;
       const payload = JSON.parse(message.content);
@@ -71,9 +71,11 @@ export default class Worker {
       const channel = this._channel;
       await channel.cancel(this._consumerTag);
 
-      await new Promise(resolve => {
-        this._closeCallback = resolve;
-      });
+      if (this._jobs.size > 0) {
+        await new Promise(resolve => {
+          this._closeCallback = resolve;
+        });
+      }
 
       await channel.close();
     }

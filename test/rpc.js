@@ -117,6 +117,14 @@ test('Should close client gracefully.', async t => {
   }));
 });
 
+test('Should close worker', async t => {
+  const JOB_NAME = 'echo' + randString(8);
+  const worker = await arque.createWorker(JOB_NAME, async message => {
+    return message;
+  });
+  await worker.close();
+});
+
 test('Should close worker gracefully.', async t => {
   const DELAY = 250;
   const JOB_NAME = 'echo' + randString(8);
