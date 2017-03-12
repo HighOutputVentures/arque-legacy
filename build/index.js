@@ -32,6 +32,7 @@ class Arque {
             delete _this._assertConnection;
             _this.startAllWorkers();
           });
+          _this._connection = connection;
           return connection;
         });
       }
@@ -68,4 +69,10 @@ class Arque {
         return clientFunc;
       }();
       return client;})();
+  }
+
+  close() {var _this5 = this;return _asyncToGenerator(function* () {
+      if (_this5._connection) {
+        yield _this5._connection.close();
+      }})();
   }}exports.default = Arque;
