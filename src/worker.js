@@ -17,6 +17,7 @@ export default class Worker {
     this._job = options.job;
     this._concurrency = options.concurrency || 1;
     this._handler = handler;
+    this._jobs = new Map();
   }
 
   get queue () {
@@ -33,7 +34,10 @@ export default class Worker {
     channel.prefetch(this._concurrency);
     this._channel = channel;
     const {consumerTag} = await channel.consume(this.queue, async message => {
+      const correlationId = message.properties.correlationId;
       const payload = JSON.parse(message.content);
+      this._jobs.set(correlationId, payload);
+
       let response;
       try {
         const result = await this._handler.apply(this._handler, payload.arguments);
@@ -48,17 +52,30 @@ export default class Worker {
         await channel.ack(message);
       }
 
-      channel.sendToQueue(
+      await channel.sendToQueue(
         message.properties.replyTo,
         new Buffer(JSON.stringify(response)),
-        {correlationId: message.properties.correlationId});
+        {correlationId});
+
+      this._jobs.delete(correlationId);
+
+      if (this._closeCallback && this._jobs.size === 0) {
+        this._closeCallback();
+      }
     });
     this._consumerTag = consumerTag;
   }
 
   async close () {
     if (this._consumerTag) {
-      this._channel.cancel(this._consumerTag);
+      const channel = this._channel;
+      await channel.cancel(this._consumerTag);
+
+      await new Promise(resolve => {
+        this._closeCallback = resolve;
+      });
+
+      await channel.close();
     }
   }
 }

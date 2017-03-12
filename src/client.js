@@ -47,9 +47,10 @@ export default class Client {
           exclusive: true
         });
         channel.consume(this.callbackQueue, async message => {
+          const correlationId = message.properties.correlationId;
           channel.ack(message);
           const payload = JSON.parse(message.content);
-          const callback = this._callbacks.get(message.properties.correlationId);
+          const callback = this._callbacks.get(correlationId);
           if (callback) {
             callback(payload);
           }
@@ -72,14 +73,23 @@ export default class Client {
     };
 
     const channel = await this.assertChannel();
-    channel.sendToQueue(
+    await channel.sendToQueue(
       this.queue,
       new Buffer(JSON.stringify(payload)),
       {correlationId, replyTo: this.callbackQueue}
     );
 
     return await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.deleteCallback(correlationId);
+        const error = new Error('Job timeout.');
+        error.code = 'TIMEOUT';
+        error.correlationId = correlationId;
+        error.job = this._job;
+        reject(error);
+      }, this._timeout);
       this._callbacks.set(correlationId, payload => {
+        clearTimeout(timeout);
         if (payload.result) {
           resolve(payload.result);
         } else {
@@ -92,12 +102,16 @@ export default class Client {
           }
           reject(error);
         }
-        delete this._callbacks.delete(correlationId);
-        if (this._closeCallback && this._callbacks.size === 0) {
-          this._closeCallback();
-        }
+        this.deleteCallback(correlationId);
       });
     });
+  }
+
+  deleteCallback (correlationId) {
+    delete this._callbacks.delete(correlationId);
+    if (this._closeCallback && this._callbacks.size === 0) {
+      this._closeCallback();
+    }
   }
 
   async close () {

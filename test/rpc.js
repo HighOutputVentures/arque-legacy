@@ -111,6 +111,39 @@ test('Should close client gracefully.', async t => {
   }));
 });
 
+test('Should close worker gracefully.', async t => {
+  const DELAY = 200;
+  const JOB_NAME = 'echo' + randString(8);
+  let count = 0;
+  let receiveCallback;
+  const worker = await arque.createWorker({
+    concurrency: 5,
+    job: JOB_NAME
+  }, async message => {
+    count++;
+    if (count >= 5) {
+      receiveCallback();
+    }
+    await delay(DELAY);
+    return message;
+  });
+  const echo = await arque.createClient(JOB_NAME);
+  const promise = Promise.all(_.times(5, async index => {
+    return await echo({index});
+  }));
+
+  await new Promise(resolve => {
+    receiveCallback = resolve;
+  });
+  const timestamp = Date.now();
+  await worker.close();
+  t.truthy(Date.now() - timestamp >= DELAY);
+  t.truthy(Date.now() - timestamp < DELAY * 2);
+  t.deepEqual(await promise, _.times(5, index => {
+    return {index};
+  }));
+});
+
 test('Should handle error correctly', async t => {
   const JOB_NAME = 'echo' + randString(8);
   await arque.createWorker(JOB_NAME, async () => {
@@ -122,4 +155,18 @@ test('Should handle error correctly', async t => {
   let error = await t.throws(echo());
   t.is(error.message, 'Error');
   t.is(error.code, 'ERROR');
+});
+
+test('Should handle timeout correctly', async t => {
+  const DELAY = 1000;
+  const JOB_NAME = 'echo' + randString(8);
+  await arque.createWorker(JOB_NAME, async () => {
+    await delay(DELAY);
+  });
+  const echo = await arque.createClient({
+    job: JOB_NAME,
+    timeout: 500
+  });
+  let error = await t.throws(echo());
+  t.is(error.code, 'TIMEOUT');
 });
