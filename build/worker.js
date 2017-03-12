@@ -17,6 +17,7 @@ class Worker {
     this._job = options.job;
     this._concurrency = options.concurrency || 1;
     this._handler = handler;
+    this._jobs = new Map();
   }
 
   get queue() {
@@ -31,23 +32,49 @@ class Worker {
 
 
       channel.prefetch(_this._concurrency);
-      yield channel.consume(_this.queue, (() => {var _ref = _asyncToGenerator(function* (message) {
-          yield channel.ack(message);
+      _this._channel = channel;
+      const { consumerTag } = yield channel.consume(_this.queue, (() => {var _ref = _asyncToGenerator(function* (message) {
+          const correlationId = message.properties.correlationId;
           const payload = JSON.parse(message.content);
-          let result;
+          _this._jobs.set(correlationId, payload);
+
+          let response;
           try {
-            result = {
-              result: yield _this._handler.apply(_this._handler, payload.arguments) };
-
+            const result = yield _this._handler.apply(_this._handler, payload.arguments);
+            response = { result };
           } catch (err) {
-            result = {
-              error: err.message };
-
+            const error = { message: err.message };
+            for (const key in err) {
+              error[key] = err[key];
+            }
+            response = { error };
+          } finally {
+            yield channel.ack(message);
           }
 
-          channel.sendToQueue(
+          yield channel.sendToQueue(
           message.properties.replyTo,
-          new Buffer(JSON.stringify(result)),
-          { correlationId: message.properties.correlationId });
-        });return function (_x) {return _ref.apply(this, arguments);};})());})();
+          new Buffer(JSON.stringify(response)),
+          { correlationId });
+
+          _this._jobs.delete(correlationId);
+
+          if (_this._closeCallback && _this._jobs.size === 0) {
+            _this._closeCallback();
+          }
+        });return function (_x) {return _ref.apply(this, arguments);};})());
+      _this._consumerTag = consumerTag;})();
+  }
+
+  close() {var _this2 = this;return _asyncToGenerator(function* () {
+      if (_this2._consumerTag) {
+        const channel = _this2._channel;
+        yield channel.cancel(_this2._consumerTag);
+
+        yield new Promise(function (resolve) {
+          _this2._closeCallback = resolve;
+        });
+
+        yield channel.close();
+      }})();
   }}exports.default = Worker;

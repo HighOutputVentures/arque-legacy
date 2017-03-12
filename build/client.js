@@ -5,17 +5,20 @@ class Client {
   /**
                * @param {Object} options
                * @param {string} options.job
+               * @param {string} [options.timeout]
                * @param {function} handler
                */
   constructor(options) {
     if (typeof options === 'string') {
       options = { job: options };
     }
+
     (0, _assert2.default)(options.job, 'Job name not specified');
     this._job = options.job;
+    this._timeout = options.timeout || 50000;
 
     this._id = _uuid2.default.v4().replace(/-/g, '');
-    this._callbacks = {};
+    this.reset();
   }
 
   get queue() {
@@ -26,9 +29,14 @@ class Client {
     return 'callback.' + this._id;
   }
 
+  reset() {
+    delete this._assertChannel;
+    this._callbacks = new Map();
+  }
+
   setConnection(connection) {
     this._connection = connection;
-    delete this._assertChannel;
+    this.reset();
   }
 
   assertChannel() {var _this = this;return _asyncToGenerator(function* () {
@@ -39,9 +47,10 @@ class Client {
               exclusive: true });
 
             channel.consume(_this.callbackQueue, (() => {var _ref2 = _asyncToGenerator(function* (message) {
+                const correlationId = message.properties.correlationId;
                 channel.ack(message);
                 const payload = JSON.parse(message.content);
-                const callback = _this._callbacks[message.properties.correlationId];
+                const callback = _this._callbacks.get(correlationId);
                 if (callback) {
                   callback(payload);
                 }
@@ -54,27 +63,62 @@ class Client {
       return yield _this._assertChannel;})();
   }
 
-  exec() {var _arguments = arguments,_this2 = this;return _asyncToGenerator(function* () {
+  exec() {var _this2 = this,_arguments = arguments;return _asyncToGenerator(function* () {
+      if (_this2._closeCallback) {
+        throw new Error('Client is closing');
+      }
       let correlationId = _uuid2.default.v4().replace(/-/g, '');
       let payload = {
         arguments: [].slice.call(_arguments) };
 
 
       const channel = yield _this2.assertChannel();
-      channel.sendToQueue(
+      yield channel.sendToQueue(
       _this2.queue,
       new Buffer(JSON.stringify(payload)),
       { correlationId, replyTo: _this2.callbackQueue });
 
 
       return yield new Promise(function (resolve, reject) {
-        _this2._callbacks[correlationId] = function (result) {
-          if (result.result) {
-            resolve(result.result);
+        const timeout = setTimeout(function () {
+          _this2.deleteCallback(correlationId);
+          const error = new Error('Job timeout.');
+          error.code = 'TIMEOUT';
+          error.correlationId = correlationId;
+          error.job = _this2._job;
+          reject(error);
+        }, _this2._timeout);
+        _this2._callbacks.set(correlationId, function (payload) {
+          clearTimeout(timeout);
+          if (payload.result) {
+            resolve(payload.result);
           } else {
-            reject(new Error(result.error));
+            const error = new Error(payload.error.message);
+            for (const key in payload.error) {
+              if (key === 'message') {
+                continue;
+              }
+              error[key] = payload.error[key];
+            }
+            reject(error);
           }
-          delete _this2._callbacks[correlationId];
-        };
+          _this2.deleteCallback(correlationId);
+        });
       });})();
+  }
+
+  deleteCallback(correlationId) {
+    delete this._callbacks.delete(correlationId);
+    if (this._closeCallback && this._callbacks.size === 0) {
+      this._closeCallback();
+    }
+  }
+
+  close() {var _this3 = this;return _asyncToGenerator(function* () {
+      yield new Promise(function (resolve) {
+        _this3._closeCallback = resolve;
+      });
+
+      const channel = yield _this3.assertChannel();
+      yield channel.close();})();
   }}exports.default = Client;

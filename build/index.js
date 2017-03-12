@@ -5,12 +5,15 @@ var _client = require('./client');var _client2 = _interopRequireDefault(_client)
 const MAX_CONNECTION_LISTENERS = 1000;
 
 class Arque {
-  constructor() {
-    let options;
-    if (typeof arguments[0] === 'string') {
-      options = { url: arguments[0] };
-    } else {
-      options = arguments[0] || {};
+  /**
+              * Constructor
+              * @param {Object} [options]
+              * @param {string} [options.uri]
+              * @param {string} [options.prefix]
+              */
+  constructor(options = {}) {
+    if (typeof options === 'string') {
+      options = { uri: options };
     }
 
     this._url = options.url || 'amqp://localhost';
@@ -22,7 +25,7 @@ class Arque {
   assertConnection() {var _this = this;return _asyncToGenerator(function* () {
       if (!_this._assertConnection) {
         _this._assertConnection = _amqplib2.default.
-        connect(_this._url).
+        connect(_this._uri).
         then(function (connection) {
           connection._maxListeners = MAX_CONNECTION_LISTENERS;
           connection.on('error', function () {
@@ -54,9 +57,15 @@ class Arque {
       let client = function () {
         const client = new _client2.default(options);
         client.setConnection(connection);
-        return _asyncToGenerator(function* () {
-          return yield client.exec.apply(client, arguments);
+
+        const clientFunc = (() => {var _ref = _asyncToGenerator(function* () {
+            return yield client.exec.apply(client, arguments);
+          });return function clientFunc() {return _ref.apply(this, arguments);};})();
+
+        clientFunc.close = _asyncToGenerator(function* () {
+          yield client.close.apply(client);
         });
+        return clientFunc;
       }();
       return client;})();
   }}exports.default = Arque;
