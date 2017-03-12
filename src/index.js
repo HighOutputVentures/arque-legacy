@@ -5,12 +5,15 @@ import Client from './client';
 const MAX_CONNECTION_LISTENERS = 1000;
 
 export default class Arque {
-  constructor () {
-    let options;
-    if (typeof arguments[0] === 'string') {
-      options = {url: arguments[0]};
-    } else {
-      options = arguments[0] || {};
+  /**
+   * Constructor
+   * @param {Object} [options]
+   * @param {string} [options.uri]
+   * @param {string} [options.prefix]
+   */
+  constructor (options = {}) {
+    if (typeof options === 'string') {
+      options = {uri: options};
     }
 
     this._url = options.url || 'amqp://localhost';
@@ -22,7 +25,7 @@ export default class Arque {
   async assertConnection () {
     if (!this._assertConnection) {
       this._assertConnection = amqp
-        .connect(this._url)
+        .connect(this._uri)
         .then(connection => {
           connection._maxListeners = MAX_CONNECTION_LISTENERS;
           connection.on('error', () => {

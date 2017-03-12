@@ -5,14 +5,17 @@ export default class Client {
   /**
    * @param {Object} options
    * @param {string} options.job
+   * @param {string} [options.timeout]
    * @param {function} handler
    */
   constructor (options) {
     if (typeof options === 'string') {
       options = {job: options};
     }
+
     assert(options.job, 'Job name not specified');
     this._job = options.job;
+    this._timeout = options.timeout || 50000;
 
     this._id = uuid.v4().replace(/-/g, '');
     this.reset();
@@ -80,7 +83,14 @@ export default class Client {
         if (payload.result) {
           resolve(payload.result);
         } else {
-          reject(new Error(payload.error));
+          const error = new Error(payload.error.message);
+          for (const key in payload.error) {
+            if (key === 'message') {
+              continue;
+            }
+            error[key] = payload.error[key];
+          }
+          reject(error);
         }
         delete this._callbacks.delete(correlationId);
         if (this._closeCallback && this._callbacks.size === 0) {

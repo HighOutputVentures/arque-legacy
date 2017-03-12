@@ -31,17 +31,19 @@ export default class Worker {
     });
 
     channel.prefetch(this._concurrency);
-    await channel.consume(this.queue, async message => {
+    this._channel = channel;
+    const {consumerTag} = await channel.consume(this.queue, async message => {
       const payload = JSON.parse(message.content);
       let response;
       try {
-        response = {
-          result: await this._handler.apply(this._handler, payload.arguments)
-        };
+        const result = await this._handler.apply(this._handler, payload.arguments);
+        response = {result};
       } catch (err) {
-        response = {
-          error: err.message
-        };
+        const error = {message: err.message};
+        for (const key in err) {
+          error[key] = err[key];
+        }
+        response = {error};
       } finally {
         await channel.ack(message);
       }
@@ -51,5 +53,12 @@ export default class Worker {
         new Buffer(JSON.stringify(response)),
         {correlationId: message.properties.correlationId});
     });
+    this._consumerTag = consumerTag;
+  }
+
+  async close () {
+    if (this._consumerTag) {
+      this._channel.cancel(this._consumerTag);
+    }
   }
 }

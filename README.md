@@ -27,10 +27,13 @@ echo('Hello World!')
   });
 ```
 
+### `client.close()`
+Gracefully shut down the `arque` client.
+
 ## Options
 
 ### `Arque`
-* `url` - RabbitMQ URL
+* `uri` - RabbitMQ URI
 * `prefix` - Queue name prefix
 
 ### `Worker`
@@ -38,6 +41,5 @@ echo('Hello World!')
 * `concurrency` - Maximum number of jobs that can be executed concurrently
 
 ### `Client`
-* `name` - Job name
-* `return` - Flag to indicate wether to expect a return value
+* `job` - Job name
 * `timeout`
