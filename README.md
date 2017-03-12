@@ -19,9 +19,9 @@ import assert from 'assert';
 
 const arque = new Arque();
 
-arque
-  .createClient('echo')
-  .exec('Hello World!')
+const echo = arque.createClient('echo');
+
+echo('Hello World!')
   .then(message => {
     assert.equal(message, 'Hello World!');
   });

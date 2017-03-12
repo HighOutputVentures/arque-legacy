@@ -54,9 +54,15 @@ export default class Arque {
     let client = (function () {
       const client = new Client(options);
       client.setConnection(connection);
-      return async function () {
+
+      const clientFunc = async function () {
         return await client.exec.apply(client, arguments);
       };
+
+      clientFunc.close = async function () {
+        await client.close.apply(client);
+      };
+      return clientFunc;
     })();
     return client;
   }

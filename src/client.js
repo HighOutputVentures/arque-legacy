@@ -15,7 +15,7 @@ export default class Client {
     this._job = options.job;
 
     this._id = uuid.v4().replace(/-/g, '');
-    this._callbacks = {};
+    this.reset();
   }
 
   get queue () {
@@ -26,9 +26,14 @@ export default class Client {
     return 'callback.' + this._id;
   }
 
+  reset () {
+    delete this._assertChannel;
+    this._callbacks = new Map();
+  }
+
   setConnection (connection) {
     this._connection = connection;
-    delete this._assertChannel;
+    this.reset();
   }
 
   async assertChannel () {
@@ -41,7 +46,7 @@ export default class Client {
         channel.consume(this.callbackQueue, async message => {
           channel.ack(message);
           const payload = JSON.parse(message.content);
-          const callback = this._callbacks[message.properties.correlationId];
+          const callback = this._callbacks.get(message.properties.correlationId);
           if (callback) {
             callback(payload);
           }
@@ -55,6 +60,9 @@ export default class Client {
   }
 
   async exec () {
+    if (this._closeCallback) {
+      throw new Error('Client is closing');
+    }
     let correlationId = uuid.v4().replace(/-/g, '');
     let payload = {
       arguments: [].slice.call(arguments)
@@ -68,14 +76,26 @@ export default class Client {
     );
 
     return await new Promise((resolve, reject) => {
-      this._callbacks[correlationId] = result => {
-        if (result.result) {
-          resolve(result.result);
+      this._callbacks.set(correlationId, payload => {
+        if (payload.result) {
+          resolve(payload.result);
         } else {
-          reject(new Error(result.error));
+          reject(new Error(payload.error));
         }
-        delete this._callbacks[correlationId];
-      };
+        delete this._callbacks.delete(correlationId);
+        if (this._closeCallback && this._callbacks.size === 0) {
+          this._closeCallback();
+        }
+      });
     });
+  }
+
+  async close () {
+    await new Promise(resolve => {
+      this._closeCallback = resolve;
+    });
+
+    const channel = await this.assertChannel();
+    await channel.close();
   }
 }

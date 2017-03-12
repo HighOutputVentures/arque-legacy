@@ -32,22 +32,23 @@ export default class Worker {
 
     channel.prefetch(this._concurrency);
     await channel.consume(this.queue, async message => {
-      await channel.ack(message);
       const payload = JSON.parse(message.content);
-      let result;
+      let response;
       try {
-        result = {
+        response = {
           result: await this._handler.apply(this._handler, payload.arguments)
         };
       } catch (err) {
-        result = {
+        response = {
           error: err.message
         };
+      } finally {
+        await channel.ack(message);
       }
 
       channel.sendToQueue(
         message.properties.replyTo,
-        new Buffer(JSON.stringify(result)),
+        new Buffer(JSON.stringify(response)),
         {correlationId: message.properties.correlationId});
     });
   }
