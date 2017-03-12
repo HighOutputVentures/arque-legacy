@@ -66,6 +66,8 @@ const client = arque.createClient({
 #### Options
 * `job` - Job name
 * `timeout` - Timeout time in milliseconds. Default value is `60000`;
+### `arque.close()`
+Close RabbitMQ connection.
 
 ## `Worker`
 ### `worker.close()`

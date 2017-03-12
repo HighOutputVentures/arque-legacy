@@ -32,6 +32,7 @@ export default class Arque {
             delete this._assertConnection;
             this.startAllWorkers();
           });
+          this._connection = connection;
           return connection;
         });
     }
@@ -68,5 +69,11 @@ export default class Arque {
       return clientFunc;
     })();
     return client;
+  }
+
+  async close () {
+    if (this._connection) {
+      await this._connection.close();
+    }
   }
 }

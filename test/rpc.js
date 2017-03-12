@@ -7,6 +7,16 @@ import {delay} from './helpers';
 
 const arque = new Arque();
 
+test.after(async () => {
+  await arque.close();
+});
+
+test('Should close arque.', async t => {
+  const arque = new Arque();
+  await arque.assertConnection();
+  await arque.close();
+});
+
 test('Should execute job and return result.', async t => {
   const DELAY = 250;
   const JOB_NAME = 'echo' + randString(8);
