@@ -45,6 +45,10 @@ class Arque {
   }
 
   createWorker(options, handler) {var _this3 = this;return _asyncToGenerator(function* () {
+      if (typeof options === 'string') {
+        options = { job: options };
+      }
+      options.prefix = _this3._prefix;
       let worker = new _worker2.default(options, handler);
       let connection = yield _this3.assertConnection();
       yield worker.start(connection);
@@ -54,6 +58,11 @@ class Arque {
   }
 
   createClient(options, handler) {var _this4 = this;return _asyncToGenerator(function* () {
+      if (typeof options === 'string') {
+        options = { job: options };
+      }
+      options.prefix = _this4._prefix;
+      options.prefix = _this4._prefix;
       let connection = yield _this4.assertConnection();
       let client = function () {
         const client = new _client2.default(options);

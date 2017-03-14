@@ -45,6 +45,10 @@ export default class Arque {
   }
 
   async createWorker (options, handler) {
+    if (typeof options === 'string') {
+      options = {job: options};
+    }
+    options.prefix = this._prefix;
     let worker = new Worker(options, handler);
     let connection = await this.assertConnection();
     await worker.start(connection);
@@ -54,6 +58,11 @@ export default class Arque {
   }
 
   async createClient (options, handler) {
+    if (typeof options === 'string') {
+      options = {job: options};
+    }
+    options.prefix = this._prefix;
+    options.prefix = this._prefix;
     let connection = await this.assertConnection();
     let client = (function () {
       const client = new Client(options);

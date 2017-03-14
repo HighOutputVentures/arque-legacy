@@ -5,6 +5,7 @@ export default class Worker {
    * @param {Object} options
    * @param {string} options.job
    * @param {string} [options.concurrency]
+   * @param {string} [options.prefix]
    * @param {function} handler
    */
   constructor (options, handler) {
@@ -16,6 +17,8 @@ export default class Worker {
     assert(typeof handler === 'function', 'Handler is not a function');
     this._job = options.job;
     this._concurrency = options.concurrency || 1;
+    this._prefix = options.prefix || '';
+
     this._handler = handler;
     this._jobs = new Map();
   }

@@ -6,6 +6,7 @@ class Client {
                * @param {Object} options
                * @param {string} options.job
                * @param {string} [options.timeout]
+               * @param {string} [options.prefix]
                * @param {function} handler
                */
   constructor(options) {
@@ -14,8 +15,10 @@ class Client {
     }
 
     (0, _assert2.default)(options.job, 'Job name not specified');
+
     this._job = options.job;
     this._timeout = options.timeout || 50000;
+    this._prefix = options.prefix || '';
 
     this._id = _uuid2.default.v4().replace(/-/g, '');
     this.reset();
