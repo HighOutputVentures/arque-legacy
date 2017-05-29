@@ -16,7 +16,7 @@ class Arque {
       options = { uri: options };
     }
 
-    this._url = options.url || 'amqp://localhost';
+    this._uri = options.uri || 'amqp://localhost';
     this._prefix = options.prefix || '';
 
     this._workers = [];
