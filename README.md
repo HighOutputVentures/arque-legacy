@@ -16,6 +16,7 @@ echo('Hello World!')
     assert.equal(message, 'Hello World!');
   });
 ```
+
 ## `Arque`
 ```js
 const arque = new Arque();
@@ -29,6 +30,7 @@ const arque = new Arque({
   prefix: null
 });
 ```
+
 ### Options
 * `uri` - RabbitMQ URI. Default value is `amqp://localhost`.
 * `prefix` - Queue name prefix. Default value is `null`.
@@ -66,6 +68,7 @@ const client = arque.createClient({
 #### Options
 * `job` - Job name
 * `timeout` - Timeout time in milliseconds. Default value is `60000`;
+
 ### `arque.close()`
 Close RabbitMQ connection.
 
