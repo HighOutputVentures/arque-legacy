@@ -1,88 +1,98 @@
+/* @flow */
 import amqp from 'amqplib';
-import Worker from './worker';
-import Client from './client';
 
-const MAX_CONNECTION_LISTENERS = 1000;
+import type {
+  AMQPConnection,
+  IArque
+} from './types';
+// import Worker from './worker';
+// import Client from './client';
 
-export default class Arque {
-  /**
-   * Constructor
-   * @param {Object} [options]
-   * @param {string} [options.uri]
-   * @param {string} [options.prefix]
-   */
-  constructor (options = {}) {
+export default class Arque implements IArque {
+  options: {uri: string, prefix: string}
+  assertConnectionPromise: Promise<AMQPConnection>
+  closePromise: Promise<void>
+  connection: AMQPConnection
+  constructor (options: string | {uri: string, prefix?: string}) {
     if (typeof options === 'string') {
-      options = {uri: options};
+      this.options = {uri: options, prefix: ''};
+    } else {
+      this.options = {
+        uri: options.uri,
+        prefix: options.prefix || ''
+      };
     }
-
-    this._uri = options.uri || 'amqp://localhost';
-    this._prefix = options.prefix || '';
-
-    this._workers = [];
   }
 
   async assertConnection () {
-    if (!this._assertConnection) {
-      this._assertConnection = amqp
-        .connect(this._uri)
-        .then(connection => {
-          connection._maxListeners = MAX_CONNECTION_LISTENERS;
-          connection.on('error', () => {
-            delete this._assertConnection;
-            this.startAllWorkers();
-          });
-          this._connection = connection;
-          return connection;
+    if (!this.assertConnectionPromise) {
+      const assertConnection = async () => {
+        const connection = await amqp.connect(this.options.uri);
+
+        connection.on('error', () => {
+          delete this.assertConnectionPromise;
         });
-    }
-    return await this._assertConnection;
-  }
-
-  async startAllWorkers () {
-    let connection = await this.assertConnection();
-    await Promise.all(this._workers.map(worker => worker.start(connection)));
-  }
-
-  async createWorker (options, handler) {
-    if (typeof options === 'string') {
-      options = {job: options};
-    }
-    options.prefix = this._prefix;
-    let worker = new Worker(options, handler);
-    let connection = await this.assertConnection();
-    await worker.start(connection);
-    this._workers.push(worker);
-
-    return worker;
-  }
-
-  async createClient (options, handler) {
-    if (typeof options === 'string') {
-      options = {job: options};
-    }
-    options.prefix = this._prefix;
-    options.prefix = this._prefix;
-    let connection = await this.assertConnection();
-    let client = (function () {
-      const client = new Client(options);
-      client.setConnection(connection);
-
-      const clientFunc = async function () {
-        return await client.exec.apply(client, arguments);
+        connection.on('close', () => {
+          delete this.assertConnectionPromise;
+        });
+        this.connection = connection;
+        return connection;
       };
+      this.assertConnectionPromise = assertConnection();
+    }
 
-      clientFunc.close = async function () {
-        await client.close.apply(client);
-      };
-      return clientFunc;
-    })();
-    return client;
+    return this.assertConnectionPromise;
+  }
+
+  // async createClient (options, handler) {
+  //   if (typeof options === 'string') {
+  //     options = {job: options};
+  //   }
+  //   options.prefix = this._prefix;
+  //   options.prefix = this._prefix;
+  //   let connection = await this.assertConnection();
+  //   let client = (function () {
+  //     const client = new Client(options);
+  //     client.setConnection(connection);
+
+  //     const clientFunc = async function () {
+  //       return await client.exec.apply(client, arguments);
+  //     };
+
+  //     clientFunc.close = async function () {
+  //       await client.close.apply(client);
+  //     };
+  //     return clientFunc;
+  //   })();
+  //   return client;
+  // }
+
+  // async createWorker (options, handler) {
+  //   if (typeof options === 'string') {
+  //     options = {job: options};
+  //   }
+  //   options.prefix = this._prefix;
+  //   let worker = new Worker(options, handler);
+  //   let connection = await this.assertConnection();
+  //   await worker.start(connection);
+  //   this._workers.push(worker);
+
+  //   return worker;
+  // }
+
+  async start () {
+    await this.assertConnection();
   }
 
   async close () {
-    if (this._connection) {
-      await this._connection.close();
+    if (!this.closePromise) {
+      const close = async () => {
+        if (this.connection) {
+          await this.connection.close();
+        }
+      };
+
+      this.closePromise = close();
     }
   }
 }

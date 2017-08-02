@@ -3,7 +3,7 @@ import _ from 'lodash';
 import {generate as randString} from 'rand-token';
 
 import Arque from '../src';
-import {delay} from './helpers';
+import {delay} from '../src/helpers';
 
 const arque = new Arque();
 

@@ -1,134 +1,153 @@
-import assert from 'assert';
+/* @flow */
 import uuid from 'uuid';
 
+import type {
+  AMQPChannel,
+  ArqueRequest,
+  ArqueResponse,
+  IArque
+} from './types';
+import ArqueError from './error';
+import {delay} from './helpers';
+
+const CALLBACK_QUEUE_EXPIRATION = 600000;
+
 export default class Client {
-  /**
-   * @param {Object} options
-   * @param {string} options.job
-   * @param {string} [options.timeout]
-   * @param {string} [options.prefix]
-   * @param {function} handler
-   */
-  constructor (options) {
-    if (typeof options === 'string') {
-      options = {job: options};
-    }
+  arque: IArque
+  options: {job: string, timeout: number}
+  id: string
+  callbacks: Map<string, ArqueResponse => void>
+  channel: AMQPChannel
+  assertChannelPromise: Promise<AMQPChannel>
+  closePromise: Promise<void>
+  constructor (arque: IArque, options: {
+    job: string,
+    timeout?: number
+  }) {
+    this.arque = arque;
 
-    assert(options.job, 'Job name not specified');
+    this.options = {
+      job: options.job,
+      timeout: options.timeout || 60000
+    };
 
-    this._job = options.job;
-    this._timeout = options.timeout || 50000;
-    this._prefix = options.prefix || '';
+    this.callbacks = new Map();
 
-    this._id = uuid.v4().replace(/-/g, '');
-    this.reset();
+    this.id = uuid.v4().replace(/-/g, '');
   }
 
-  get queue () {
-    return (this._prefix || '') + this._job;
+  getQueueName (): string {
+    return this.arque.options.prefix + this.options.job;
   }
 
-  get callbackQueue () {
-    return 'callback.' + this._id;
+  getCallbackQueueName (): string {
+    return 'callback.' + this.id;
   }
 
-  reset () {
-    delete this._assertChannel;
-    this._callbacks = new Map();
-  }
-
-  setConnection (connection) {
-    this._connection = connection;
-    this.reset();
-  }
-
-  async assertChannel () {
-    if (!this._assertChannel) {
+  async assertChannel (): Promise<AMQPChannel> {
+    if (!this.assertChannelPromise) {
       const assertChannel = async () => {
-        const channel = await this._connection.createChannel();
-        await channel.assertQueue(this.callbackQueue, {
-          exclusive: true
+        const connection = await this.arque.assertConnection();
+        const channel: AMQPChannel = await connection.createChannel();
+
+        channel.on('error', () => {
+          delete this.assertChannelPromise;
         });
-        channel.consume(this.callbackQueue, async message => {
+
+        await channel.assertQueue(this.getCallbackQueueName(), {
+          exclusive: true,
+          messageTtl: this.options.timeout,
+          expires: CALLBACK_QUEUE_EXPIRATION
+        });
+
+        await channel.consume(this.getCallbackQueueName(), async message => {
+          await channel.ack(message);
+
           const correlationId = message.properties.correlationId;
-          channel.ack(message);
-          const payload = JSON.parse(message.content);
-          const callback = this._callbacks.get(correlationId);
+          const response: ArqueResponse = JSON.parse(message.content.toString('utf8'));
+          const callback = this.callbacks.get(correlationId);
           if (callback) {
-            callback(payload);
+            callback(response);
           }
         });
-        this._channel = channel;
+
+        this.channel = channel;
         return channel;
       };
-      this._assertChannel = assertChannel();
+      this.assertChannelPromise = assertChannel();
     }
 
-    return await this._assertChannel;
+    return this.assertChannelPromise;
   }
 
-  async exec () {
-    if (this._closeCallback) {
-      throw new Error('Client is closing');
+  async execute (...args: Array<mixed>): Promise<any> {
+    if (this.closePromise) {
+      throw new Error('Client is closing.');
     }
+
     let correlationId = uuid.v4().replace(/-/g, '');
-    let payload = {
-      arguments: [].slice.call(arguments)
+    const request: ArqueRequest = {
+      correlationId,
+      arguments: args,
+      timestamp: Date.now()
     };
 
     const promise = new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        this.deleteCallback(correlationId);
-        const error = new Error('Job timeout.');
-        error.code = 'TIMEOUT';
-        error.correlationId = correlationId;
-        error.job = this._job;
-        reject(error);
-      }, this._timeout);
-      this._callbacks.set(correlationId, payload => {
+        this.callbacks.delete(correlationId);
+        reject(new ArqueError('ERR_ARQUE_REQUEST_TIMEOUT', 'Request timeout.', {
+          request,
+          job: this.options.job
+        }));
+      }, this.options.timeout);
+
+      const callback = (response: ArqueResponse) => {
         clearTimeout(timeout);
-        if (payload.result) {
-          resolve(payload.result);
-        } else {
-          const error = new Error(payload.error.message);
-          for (const key in payload.error) {
+        if (typeof response.result !== 'undefined') {
+          resolve(response.result);
+        } else if (typeof response.error !== 'undefined') {
+          const error = new Error(response.error.message);
+          for (const key in response.error) {
             if (key === 'message') {
               continue;
             }
-            error[key] = payload.error[key];
+            // $FlowFixMe
+            error[key] = response.error[key];
           }
           reject(error);
         }
-        this.deleteCallback(correlationId);
-      });
+        this.callbacks.delete(correlationId);
+      };
+
+      this.callbacks.set(correlationId, callback);
     });
 
     const channel = await this.assertChannel();
-    await channel.sendToQueue(
-      this.queue,
-      new Buffer(JSON.stringify(payload)),
-      {correlationId, replyTo: this.callbackQueue}
-    );
+    await channel.sendToQueue(this.getQueueName(), new Buffer(JSON.stringify(request)), {
+      correlationId,
+      replyTo: this.getCallbackQueueName()
+    });
 
-    return await promise;
+    return promise;
   }
 
-  deleteCallback (correlationId) {
-    delete this._callbacks.delete(correlationId);
-    if (this._closeCallback && this._callbacks.size === 0) {
-      this._closeCallback();
-    }
-  }
+  async close (force?: boolean): Promise<void> {
+    if (!this.closePromise) {
+      const close = async () => {
+        if (!force) {
+          while (this.callbacks.size > 0) {
+            await delay(250 + Math.random() * 250);
+          }
+        }
 
-  async close () {
-    if (this._callbacks.size > 0) {
-      await new Promise(resolve => {
-        this._closeCallback = resolve;
-      });
+        if (this.channel) {
+          await this.channel.close();
+        }
+      };
+
+      this.closePromise = close();
     }
 
-    if (this._channel) {
-      await this._channel.close();
-    }
+    await this.closePromise;
   }
 }
