@@ -49,8 +49,10 @@ export default class Client {
       const assertChannel = async () => {
         const connection = await this.arque.assertConnection();
 
-        connection.once('error', () => {
-          delete this.assertChannelPromise;
+        connection.once('close', err => {
+          if (err) {
+            delete this.assertChannelPromise;
+          }
         });
         const channel: AMQPChannel = await connection.createChannel();
 

@@ -45,7 +45,6 @@ export default class Worker {
   async start (): Promise<void> {
     if (!this.startPromise) {
       const start = async () => {
-        console.log('starting');
         const connection = await this.arque.assertConnection();
 
         connection.once('close', async err => {
@@ -95,7 +94,6 @@ export default class Worker {
         });
 
         this.consumerTag = consumerTag;
-        console.log('started');
       };
 
       this.startPromise = start();
