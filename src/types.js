@@ -10,25 +10,28 @@ export type AMQPMessage = {
 export type AMQPConsumer = (AMQPMessage) => Promise<void>
 
 export type AMQPChannel = {
-  assertQueue(string, options: {
+  assertQueue(string, {
     exclusive?: boolean,
     messageTtl?: number,
     expires? : number
   }): Promise<void>,
-  consume(string, AMQPConsumer): Promise<void>,
+  consume(string, AMQPConsumer): Promise<{consumerTag: string}>,
   ack(AMQPMessage): Promise<void>,
-  sendToQueue(string, Buffer, options: {
+  sendToQueue(string, Buffer, {
     expiration?: number,
     persistent?: boolean,
     correlationId?: string,
     replyTo?: string
   }): Promise<void>,
   close(): Promise<void>,
-  on(string, Function): void
+  cancel(string): Promise<void>,
+  on(string, Function): void,
+  prefetch(number): void
 }
 
 export type AMQPConnection = {
-  createChannel(): Promise<AMQPChannel>
+  createChannel(): Promise<AMQPChannel>,
+  close(): Promise<void>
 }
 
 export type ArqueRequest = {

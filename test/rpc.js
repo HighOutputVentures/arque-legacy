@@ -1,18 +1,20 @@
 import test from 'ava';
 import _ from 'lodash';
-import {generate as randString} from 'rand-token';
+
+import {randString} from './helpers';
 
 import Arque from '../src';
 import {delay} from '../src/helpers';
 
-const arque = new Arque();
+const URI = process.env.RABBITMQ_URI || 'amqp://127.0.0.1';
+const arque = new Arque(URI);
 
 test.after(async () => {
   await arque.close();
 });
 
 test('Should close arque.', async t => {
-  const arque = new Arque();
+  const arque = new Arque(URI);
   await arque.assertConnection();
   await arque.close();
 });
@@ -31,7 +33,7 @@ test('Should execute job and return result.', async t => {
 });
 
 test('Should execute jobs sequentially', async t => {
-  const DELAY = 250;
+  const DELAY = 500;
   const JOB_NAME = 'echo' + randString(8);
   await arque.createWorker(JOB_NAME, async message => {
     await delay(DELAY);
@@ -42,6 +44,7 @@ test('Should execute jobs sequentially', async t => {
   const result = await Promise.all(_.times(3, async index => {
     return await echo({index});
   }));
+
   t.truthy(Date.now() - timestamp >= DELAY * 3);
   t.truthy(Date.now() - timestamp < (DELAY * 3) + 250);
   t.deepEqual(result, _.times(3, index => {
@@ -50,7 +53,7 @@ test('Should execute jobs sequentially', async t => {
 });
 
 test('Should execute jobs in parallel', async t => {
-  const DELAY = 250;
+  const DELAY = 500;
   const JOB_NAME = 'echo' + randString(8);
   await arque.createWorker({
     job: JOB_NAME,
@@ -64,6 +67,7 @@ test('Should execute jobs in parallel', async t => {
   const result = await Promise.all(_.times(10, async index => {
     return await echo({index});
   }));
+
   t.truthy(Date.now() - timestamp >= DELAY);
   t.truthy(Date.now() - timestamp < DELAY + 250);
   t.deepEqual(result, _.times(10, index => {
@@ -192,5 +196,5 @@ test('Should handle timeout correctly', async t => {
     timeout: 500
   });
   let error = await t.throws(echo());
-  t.is(error.code, 'TIMEOUT');
+  t.is(error.code, 'ERR_ARQUE_REQUEST_TIMEOUT');
 });

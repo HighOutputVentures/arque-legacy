@@ -9,7 +9,7 @@ import type {
   ArqueRequest
 } from '../src/types';
 
-const URI = 'amqp://rabbit:92mvh8VXZCYSH69c@127.0.0.1';
+const URI = process.env.RABBITMQ_URI || 'amqp://127.0.0.1';
 
 test('Should send request correctly', async t => {
   const arque = new Arque({

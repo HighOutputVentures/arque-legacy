@@ -7,7 +7,8 @@
     "test": "ava",
     "clean": "rm -rf build",
     "build": "npm run clean && babel src --out-dir build",
-    "flow": "flow check"
+    "flow": "flow check",
+    "install": "npm run build"
   },
   "keywords": [
     "queue",
