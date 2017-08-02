@@ -45,8 +45,7 @@
   "ava": {
     "files": [
       "test/*.js",
-      "!test/helpers.js",
-      "!test/rpc.js"
+      "!test/helpers.js"
     ],
     "timeout": "10s",
     "concurrency": 5,

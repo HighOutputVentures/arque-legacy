@@ -26,11 +26,14 @@ export type AMQPChannel = {
   close(): Promise<void>,
   cancel(string): Promise<void>,
   on(string, Function): void,
+  once(string, Function): void,
   prefetch(number): void
 }
 
 export type AMQPConnection = {
   createChannel(): Promise<AMQPChannel>,
+  on(string, Function): void,
+  once(string, Function): void,
   close(): Promise<void>
 }
 

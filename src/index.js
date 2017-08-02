@@ -30,17 +30,19 @@ export default class Arque implements IArque {
     if (!this.assertConnectionPromise) {
       const assertConnection = async () => {
         const connection = await amqp.connect(this.options.uri);
+        connection.setMaxListeners(1000);
 
-        connection.on('error', () => {
-          delete this.assertConnectionPromise;
-        });
         connection.on('close', () => {
+          delete this.connection;
           delete this.assertConnectionPromise;
         });
         this.connection = connection;
         return connection;
       };
       this.assertConnectionPromise = assertConnection();
+      this.assertConnectionPromise.catch(() => {
+        delete this.assertConnectionPromise;
+      });
     }
 
     return this.assertConnectionPromise;

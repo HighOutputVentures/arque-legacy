@@ -140,7 +140,7 @@ test('Should close worker', async t => {
 });
 
 test('Should close worker gracefully.', async t => {
-  const DELAY = 250;
+  const DELAY = 1000;
   const JOB_NAME = 'echo' + randString(8);
   let count = 0;
   let receiveCallback;
@@ -165,6 +165,7 @@ test('Should close worker gracefully.', async t => {
   });
   const timestamp = Date.now();
   await worker.close();
+
   t.truthy(Date.now() - timestamp >= DELAY);
   t.truthy(Date.now() - timestamp < DELAY + 250);
   t.deepEqual(await promise, _.times(5, index => {

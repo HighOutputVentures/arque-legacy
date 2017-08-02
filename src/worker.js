@@ -1,5 +1,4 @@
 /* @flow */
-
 import type {
   AMQPChannel,
   IArque
@@ -34,10 +33,30 @@ export default class Worker {
     return this.arque.options.prefix + this.options.job;
   }
 
+  reconnect () {
+    delete this.startPromise;
+    delete this.channel;
+    this.start().catch(async () => {
+      await delay(2000 + Math.random() * 500);
+      this.reconnect();
+    });
+  }
+
   async start (): Promise<void> {
     if (!this.startPromise) {
       const start = async () => {
+        console.log('starting');
         const connection = await this.arque.assertConnection();
+
+        connection.once('close', async err => {
+          if (err) {
+            this.reconnect();
+          }
+        });
+        connection.once('error', async () => {
+          this.reconnect();
+        });
+
         const channel = await connection.createChannel();
         this.channel = channel;
 
@@ -76,6 +95,7 @@ export default class Worker {
         });
 
         this.consumerTag = consumerTag;
+        console.log('started');
       };
 
       this.startPromise = start();
@@ -94,7 +114,7 @@ export default class Worker {
 
     if (!force) {
       while (this.jobs.size > 0) {
-        await delay(250 + Math.random() * 250);
+        await delay(100 + Math.random() * 100);
       }
     }
 
