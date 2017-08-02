@@ -1,86 +1,123 @@
-import assert from 'assert';
+/* @flow */
+import type {
+  AMQPChannel,
+  IArque
+} from './types';
+import {delay} from './helpers';
 
 export default class Worker {
-  /**
-   * @param {Object} options
-   * @param {string} options.job
-   * @param {string} [options.concurrency]
-   * @param {string} [options.prefix]
-   * @param {function} handler
-   */
-  constructor (options, handler) {
-    if (typeof options === 'string') {
-      options = {job: options};
+  arque: IArque
+  options: {job: string, concurrency: number}
+  handler: Function => Promise<any>
+  jobs: Map<string, any>
+  consumerTag: string
+  startPromise: Promise<void>
+  channel: AMQPChannel
+  constructor (arque: IArque, options: {
+    job: string,
+    concurrency?: number
+  }, handler: Function) {
+    this.arque = arque;
+
+    this.options = {
+      job: options.job,
+      concurrency: options.concurrency || 1
+    };
+
+    this.handler = handler;
+
+    this.jobs = new Map();
+  }
+
+  getQueueName (): string {
+    return this.arque.options.prefix + this.options.job;
+  }
+
+  reconnect () {
+    delete this.startPromise;
+    delete this.channel;
+    this.start().catch(async () => {
+      await delay(2000 + Math.random() * 500);
+      this.reconnect();
+    });
+  }
+
+  async start (): Promise<void> {
+    if (!this.startPromise) {
+      const start = async () => {
+        const connection = await this.arque.assertConnection();
+
+        connection.once('close', async err => {
+          if (err) {
+            this.reconnect();
+          }
+        });
+        connection.once('error', async () => {
+          this.reconnect();
+        });
+
+        const channel = await connection.createChannel();
+        this.channel = channel;
+
+        await channel.assertQueue(this.getQueueName(), {
+          durable: true
+        });
+
+        channel.prefetch(this.options.concurrency);
+
+        const {consumerTag} = await channel.consume(this.getQueueName(), async message => {
+          const correlationId = message.properties.correlationId;
+
+          const payload = JSON.parse(message.content.toString());
+          this.jobs.set(correlationId, payload);
+
+          let response;
+          try {
+            const result = await this.handler.apply(this.handler, payload.arguments);
+            response = {result};
+          } catch (err) {
+            const error = {message: err.message};
+            for (const key in err) {
+              error[key] = err[key];
+            }
+            response = {error};
+          } finally {
+            await channel.ack(message);
+          }
+
+          await channel.sendToQueue(
+            message.properties.replyTo,
+            new Buffer(JSON.stringify(response)),
+            {correlationId});
+
+          this.jobs.delete(correlationId);
+        });
+
+        this.consumerTag = consumerTag;
+      };
+
+      this.startPromise = start();
     }
 
-    assert(options.job, 'Job name not specified');
-    assert(typeof handler === 'function', 'Handler is not a function');
-    this._job = options.job;
-    this._concurrency = options.concurrency || 1;
-    this._prefix = options.prefix || '';
-
-    this._handler = handler;
-    this._jobs = new Map();
+    return this.startPromise;
   }
 
-  get queue () {
-    return (this._prefix || '') + this._job;
+  async close (force?: boolean): Promise<void> {
+    return this.stop(force);
   }
+  async stop (force?: boolean): Promise<void> {
+    if (this.consumerTag && this.channel) {
+      await this.channel.cancel(this.consumerTag);
+    }
 
-  async start (connection) {
-    let channel = await connection.createChannel();
-    this._channel = channel;
-    await channel.assertQueue(this.queue, {
-      durable: true
-    });
-
-    channel.prefetch(this._concurrency);
-
-    const {consumerTag} = await channel.consume(this.queue, async message => {
-      const correlationId = message.properties.correlationId;
-      const payload = JSON.parse(message.content);
-      this._jobs.set(correlationId, payload);
-
-      let response;
-      try {
-        const result = await this._handler.apply(this._handler, payload.arguments);
-        response = {result};
-      } catch (err) {
-        const error = {message: err.message};
-        for (const key in err) {
-          error[key] = err[key];
-        }
-        response = {error};
-      } finally {
-        await channel.ack(message);
+    if (!force) {
+      while (this.jobs.size > 0) {
+        await delay(100 + Math.random() * 100);
       }
+    }
 
-      await channel.sendToQueue(
-        message.properties.replyTo,
-        new Buffer(JSON.stringify(response)),
-        {correlationId});
-
-      this._jobs.delete(correlationId);
-
-      if (this._closeCallback && this._jobs.size === 0) {
-        this._closeCallback();
-      }
-    });
-    this._consumerTag = consumerTag;
-  }
-
-  async close () {
-    if (this._consumerTag) {
-      const channel = this._channel;
-      await channel.cancel(this._consumerTag);
-
-      if (this._jobs.size > 0) {
-        await new Promise(resolve => {
-          this._closeCallback = resolve;
-        });
-      }
-
-      await channel.close();
+    if (this.channel) {
+      await this.channel.close();
     }
   }
 }
